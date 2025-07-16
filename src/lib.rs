@@ -1,3 +1,64 @@
+//! ## Steppe
+//! This crate is used to track the progress of a task through multiple steps composed of multiple states.
+//! 
+//! The objectives are:
+//! - Have a very simple API to describe the steps composing a task. (create the steps and update the progress)
+//! - Provide an easy way to display the current progress while the process is running.
+//! - Provide a way to get the accumulated durations of each steps to quickly see the bottleneck.
+//! - Don't slow down the main process too much.
+//! 
+//! The crate is composed of only 2 parts:
+//! - The [`Progress`] struct that is used to track the progress of the task.
+//! - The [`Step`] trait that is used to describe the steps composing a task.
+//! 
+//! The [`Progress`] struct is thread-safe, can be cloned cheaply and shared everywhere. While a thread is updating it another can display what we're doing.
+//! The [`Step`] trait is used to describe the steps composing a task.
+//! 
+//! The API of the [`Progress`] is made of three parts:
+//! - Add something to the stack of steps being processed with the [`Progress::update_progress`] method. It accepts any type that implements the [`Step`] trait.
+//! - Get the current progress view with the [`Progress::as_progress_view`] method.
+//! - Get the accumulated durations of each steps with the [`Progress::accumulated_durations`] method.
+//!
+//! Since creating [`Step`]s is a bit tedious, you can use the following helpers:
+//! - [`make_enum_progress`] macro.
+//! - [`make_atomic_progress`] macro.
+//! - Or implement the [`NamedStep`] trait.
+//! 
+//! ```rust
+//! use std::sync::atomic::Ordering;
+//! use steppe::{make_enum_progress, make_atomic_progress, Progress, Step, NamedStep, AtomicSubStep};
+//! 
+//! // This will create a new enum that implements the `Step` trait automatically. Take care it's very case sensitive.
+//! make_enum_progress! {
+//!     pub enum TamosDay {
+//!         PetTheDog,
+//!         WalkTheDog,
+//!         TypeALotOnTheKeyboard,
+//!         WalkTheDogAgain,
+//!     }
+//! }
+//! 
+//! // This create a new struct that implement the `Step` trait automatically.
+//! // It's displayed as "key strokes" and we cannot change its name.
+//! make_atomic_progress!(KeyStrokes alias AtomicKeyStrokesStep => "key strokes");
+//! 
+//! let mut progress = Progress::default();
+//! progress.update_progress(TamosDay::PetTheDog); // We're at 0/4 and 0% of completion
+//! progress.update_progress(TamosDay::WalkTheDog); // We're at 1/4 and 25% of completion
+//! 
+//! progress.update_progress(TamosDay::TypeALotOnTheKeyboard); // We're at 2/4 and 50% of completion
+//! let (atomic, key_strokes) = AtomicKeyStrokesStep::new(1000);
+//! progress.update_progress(key_strokes);
+//! // Here we enqueued a new step that have 1000 total states. Since we don't want to take a lock everytime
+//! // we type on the keyboard we're instead going to increase an atomic without taking the mutex.
+//!
+//! atomic.fetch_add(500, Ordering::Relaxed);
+//! // If we fetch the progress at this point it should be exactly between 50% and 75%.
+//! 
+//! progress.update_progress(TamosDay::WalkTheDogAgain); // We're at 3/4 and 75% of completion
+//! // By enqueuing this new step the progress is going to drop everything that was pushed after the `TamosDay` type was pushed.
+//! ```
+
 use std::any::TypeId;
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -9,12 +70,26 @@ use indexmap::IndexMap;
 use serde::Serialize;
 use utoipa::ToSchema;
 
+/// The main trait of the crate. That describes an unit of works.
+/// - It contains a name that can change over time.
+/// - A total number of state the step must go through.
+/// - The current state of the step.
+/// 
+/// The `current` should never exceed the `total`.
 pub trait Step: 'static + Send + Sync {
     fn name(&self) -> Cow<'static, str>;
     fn current(&self) -> u64;
     fn total(&self) -> u64;
 }
 
+/// The main struct of the crate.
+/// It stores the current steps we're processing.
+/// It also contains the durations of each steps.
+/// 
+/// The structure is thread-safe, can be cloned cheaply and shared everywhere.
+/// But keep in mind that when you update the step you're at we must take a mutex.
+/// If you need to quickly update a tons of values you may want to use atomic numbers
+/// that you can update without taking the mutex.
 #[derive(Clone, Default)]
 pub struct Progress {
     steps: Arc<RwLock<InnerProgress>>,
@@ -29,6 +104,12 @@ struct InnerProgress {
 }
 
 impl Progress {
+    /// Update the progress of the current step.
+    /// 
+    /// If the step is not found, it will be added.
+    /// If the step is found, it will be updated.
+    /// 
+    /// If the step is found and the current is higher than the total, it will be ignored.
     pub fn update_progress<P: Step>(&self, sub_progress: P) {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress { steps, durations } = &mut *inner;
@@ -43,6 +124,10 @@ impl Progress {
         steps.push((step_type, Box::new(sub_progress), now));
     }
 
+    /// Drop all the steps and update the durations.
+    /// 
+    /// This is not mandatory. But if you don't do it and take a lot of time before calling [`Progress::accumulated_durations`] the last step will appear as taking more time than it actually did.
+    /// Directly calling [`Progress::accumulated_durations`] instead of `finish` will give the same result.
     pub fn finish(&self) {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress { steps, durations } = &mut *inner;
@@ -52,6 +137,28 @@ impl Progress {
         steps.clear();
     }
 
+    /// Get the current progress view.
+    /// 
+    /// This is useful to display the progress to the user.
+    /// 
+    /// The view shows a list of steps with their current state, the total number of states for each step and the total percentage of completion at the end:
+    /// ```json5
+    /// {
+    ///     "steps": [
+    ///         {
+    ///             "currentStep": "step1", // The name of the step
+    ///             "finished": 50, // The number of states that have been completed
+    ///             "total": 100 // The total number of states for the step
+    ///         },
+    ///         {
+    ///             "currentStep": "step2",
+    ///             "finished": 0,
+    ///             "total": 100
+    ///         }
+    ///     ],
+    ///     "percentage": 50.0
+    /// }
+    /// ```
     pub fn as_progress_view(&self) -> ProgressView {
         let inner = self.steps.read().unwrap();
         let InnerProgress { steps, .. } = &*inner;
@@ -78,6 +185,16 @@ impl Progress {
         }
     }
 
+    /// Get the accumulated durations of each steps.
+    /// 
+    /// This is useful to see the bottleneck of the process.
+    /// 
+    /// Returns an ordered map of the step name to the duration:
+    /// ```json5
+    /// {
+    ///     "step1 > step2": "1.23s", // The duration of the step2 within the step1
+    ///     "step1": "1.43s", // The total duration of the step1. Here we see that most of the time was spent in step1.
+    /// }
     pub fn accumulated_durations(&self) -> IndexMap<String, String> {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress {
@@ -166,7 +283,7 @@ pub use enum_iterator as _private_enum_iterator;
 /// It's useful when we're just going to move from one state to another.
 ///
 /// ```rust
-/// make_enum_progress! {
+/// steppe::make_enum_progress! {
 ///     pub enum CustomMainSteps {
 ///         TheFirstStep,
 ///         TheSecondWeNeverSee,
@@ -212,7 +329,7 @@ macro_rules! make_enum_progress {
 
 /// This macro is used to create a new atomic progress step quickly.
 /// ```rust
-/// make_atomic_progress!(Document alias AtomicDocumentStep => "document");
+/// steppe::make_atomic_progress!(Document alias AtomicDocumentStep => "document");
 /// ```
 ///
 /// This will create a new struct `Document` that implements the `NamedStep` trait and a new type `AtomicDocumentStep` that implements the `Step` trait.
@@ -223,25 +340,16 @@ macro_rules! make_atomic_progress {
     ($struct_name:ident alias $atomic_struct_name:ident => $step_name:literal) => {
         #[derive(Default, Debug, Clone, Copy)]
         pub struct $struct_name {}
-        impl NamedStep for $struct_name {
+        impl $crate::NamedStep for $struct_name {
             fn name(&self) -> &'static str {
                 $step_name
             }
         }
-        pub type $atomic_struct_name = AtomicSubStep<$struct_name>;
+        pub type $atomic_struct_name = $crate::AtomicSubStep<$struct_name>;
     };
 }
 
-make_enum_progress! {
-    pub enum MergingWordCache {
-        WordDocids,
-        WordFieldIdDocids,
-        ExactWordDocids,
-        WordPositionDocids,
-        FieldIdWordCountDocids,
-    }
-}
-
+/// The returned view of the progress.
 #[derive(Debug, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[schema(rename_all = "camelCase")]
@@ -250,6 +358,7 @@ pub struct ProgressView {
     pub percentage: f32,
 }
 
+/// The view of the individual steps.
 #[derive(Debug, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[schema(rename_all = "camelCase")]
