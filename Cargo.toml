@@ -2,6 +2,10 @@
 name = "steppe"
 version = "0.1.0"
 edition = "2024"
+license-file = "LICENSE"
+description = "Follow the progress of a task easily"
+repository = "https://github.com/irevoire/steppe"
+authors = ["Tamo <tamo@meilisearch.com>"]
 
 [dependencies]
 convert_case = "0.8.0"
