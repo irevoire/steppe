@@ -239,6 +239,7 @@ pub trait NamedStep: 'static + Send + Sync + Default {
 /// You can use this struct if:
 /// - The name of the step doesn't change
 /// - The total number of steps doesn't change
+#[derive(Debug, Clone)]
 pub struct AtomicSubStep<Name: NamedStep> {
     unit_name: Name,
     current: Arc<AtomicU64>,
@@ -385,6 +386,7 @@ pub struct ProgressStepView {
 ///     10,
 /// ));
 /// ```
+#[derive(Debug, Clone)]
 pub struct VariableNameStep<U: Send + Sync + 'static> {
     name: String,
     current: u64,
