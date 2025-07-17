@@ -1,5 +1,5 @@
 use insta::assert_json_snapshot;
-use std::sync::atomic::Ordering;
+use std::sync::{atomic::{AtomicU64, Ordering}, Arc};
 use steppe::*;
 
 make_enum_progress! {
@@ -22,8 +22,8 @@ make_enum_progress! {
 make_atomic_progress!(CustomUnit alias AtomicCustomUnit => "custom unit");
 
 #[test]
-fn one_level() {
-    let progress = Progress::default();
+fn the_test_tm() {
+    let progress = DefaultProgress::default();
     progress.update(CustomMainSteps::TheFirstStep);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
@@ -195,4 +195,30 @@ fn one_level() {
       "the final step": "[duration]"
     }
     "#);
+}
+
+
+#[test]
+fn using_a_custom_provider() {
+    struct CustomProgress {
+        updated: Arc<AtomicU64>,
+    }
+
+    impl Progress for CustomProgress {
+        fn update(&self, _sub_progress: impl Step) {
+            self.updated.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    let progress = CustomProgress { updated: Arc::new(AtomicU64::new(0)) };
+    progress.update(CustomMainSteps::TheFirstStep);
+    assert_eq!(progress.updated.load(Ordering::Relaxed), 1);
+    progress.update(CustomSubSteps::WeWontGoTooFarThisTime);
+    assert_eq!(progress.updated.load(Ordering::Relaxed), 2);
+    progress.update(CustomSubSteps::JustOneMore);
+    assert_eq!(progress.updated.load(Ordering::Relaxed), 3);
+    progress.update(CustomSubSteps::WeAreDone);
+    assert_eq!(progress.updated.load(Ordering::Relaxed), 4);
+    progress.update(CustomMainSteps::TheThirdStep);
+    assert_eq!(progress.updated.load(Ordering::Relaxed), 5);
 }
