@@ -275,8 +275,6 @@ impl<Name: NamedStep> Step for AtomicSubStep<Name> {
 
 #[doc(hidden)]
 pub use convert_case as _private_convert_case;
-#[doc(hidden)]
-pub use enum_iterator as _private_enum_iterator;
 
 /// Helper to create a new enum that implements the `Step` trait.
 /// It's useful when we're just going to move from one state to another.
@@ -297,7 +295,7 @@ pub use enum_iterator as _private_enum_iterator;
 macro_rules! make_enum_progress {
     ($visibility:vis enum $name:ident { $($variant:ident,)+ }) => {
         #[repr(u8)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, $crate::_private_enum_iterator::Sequence)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[allow(clippy::enum_variant_names)]
         $visibility enum $name {
             $($variant),+
@@ -309,7 +307,7 @@ macro_rules! make_enum_progress {
 
                 match self {
                     $(
-                        $name::$variant => stringify!($variant).from_case(convert_case::Case::Camel).to_case(convert_case::Case::Lower).into()
+                        $name::$variant => stringify!($variant).from_case($crate::_private_convert_case::Case::Camel).to_case($crate::_private_convert_case::Case::Lower).into()
                     ),+
                 }
             }
@@ -319,11 +317,20 @@ macro_rules! make_enum_progress {
             }
 
             fn total(&self) -> u64 {
-                use $crate::_private_enum_iterator::Sequence;
-                Self::CARDINALITY as u64
+                use $crate::_internal_count;
+                $crate::_internal_count!($($variant)+) as u64
             }
         }
     };
+}
+
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _internal_count {
+    () => (0u64);
+    ( $x:ident ) => (1u64);
+    ( $x:ident $($xs:ident)* ) => (1u64 + $crate::_internal_count!($($xs)*));
 }
 
 /// This macro is used to create a new atomic progress step quickly.
