@@ -142,8 +142,8 @@ impl DefaultProgress {
         }
 
         durations
-            .drain(..)
-            .map(|(name, duration)| (name, format!("{duration:.2?}")))
+            .iter()
+            .map(|(name, duration)| (name.to_string(), format!("{duration:.2?}")))
             .collect()
     }
 }
