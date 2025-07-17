@@ -1,5 +1,8 @@
 use insta::assert_json_snapshot;
-use std::sync::{atomic::{AtomicU64, Ordering}, Arc};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use steppe::*;
 
 make_enum_progress! {
@@ -182,7 +185,9 @@ fn the_test_tm() {
 
     let mut durations = progress.accumulated_durations();
     // sadly we must erase all the values because that would be flaky. But the name and order of the steps should be stable.
-    durations.iter_mut().for_each(|(_, v)| *v = "[duration]".to_string());
+    durations
+        .iter_mut()
+        .for_each(|(_, v)| *v = "[duration]".to_string());
     assert_json_snapshot!(durations, @r#"
     {
       "the first step > we wont go too far this time": "[duration]",
@@ -197,7 +202,6 @@ fn the_test_tm() {
     "#);
 }
 
-
 #[test]
 fn using_a_custom_provider() {
     struct CustomProgress {
@@ -210,7 +214,9 @@ fn using_a_custom_provider() {
         }
     }
 
-    let progress = CustomProgress { updated: Arc::new(AtomicU64::new(0)) };
+    let progress = CustomProgress {
+        updated: Arc::new(AtomicU64::new(0)),
+    };
     progress.update(CustomMainSteps::TheFirstStep);
     assert_eq!(progress.updated.load(Ordering::Relaxed), 1);
     progress.update(CustomSubSteps::WeWontGoTooFarThisTime);
