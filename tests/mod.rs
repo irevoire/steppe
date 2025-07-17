@@ -24,7 +24,7 @@ make_atomic_progress!(CustomUnit alias AtomicCustomUnit => "custom unit");
 #[test]
 fn one_level() {
     let progress = Progress::default();
-    progress.update_progress(CustomMainSteps::TheFirstStep);
+    progress.update(CustomMainSteps::TheFirstStep);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -37,7 +37,7 @@ fn one_level() {
       "percentage": 0.0
     }
     "#);
-    progress.update_progress(CustomSubSteps::WeWontGoTooFarThisTime);
+    progress.update(CustomSubSteps::WeWontGoTooFarThisTime);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -55,7 +55,7 @@ fn one_level() {
       "percentage": 0.0
     }
     "#);
-    progress.update_progress(CustomSubSteps::JustOneMore);
+    progress.update(CustomSubSteps::JustOneMore);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -73,10 +73,10 @@ fn one_level() {
       "percentage": 8.333334
     }
     "#);
-    progress.update_progress(CustomSubSteps::WeAreDone);
+    progress.update(CustomSubSteps::WeAreDone);
     let (atomic, unit) = AtomicCustomUnit::new(10);
     atomic.fetch_add(6, Ordering::Relaxed);
-    progress.update_progress(unit);
+    progress.update(unit);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -123,7 +123,7 @@ fn one_level() {
     }
     "#);
     // This should delete both the atomic step and the sub step + We're skipping the second step
-    progress.update_progress(CustomMainSteps::TheThirdStep);
+    progress.update(CustomMainSteps::TheThirdStep);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -139,7 +139,7 @@ fn one_level() {
     let (atomic, unit) = AtomicCustomUnit::new(2);
     // We don't have any check on the max but the percentage should cap itself at the maximum specified value as a "finished" higher than the total means you have a bug
     atomic.fetch_add(1000, Ordering::Relaxed);
-    progress.update_progress(unit);
+    progress.update(unit);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [
@@ -158,7 +158,7 @@ fn one_level() {
     }
     "#);
     // This should delete the atomic step only
-    progress.update_progress(CustomMainSteps::TheFinalStep);
+    progress.update(CustomMainSteps::TheFinalStep);
     assert_json_snapshot!(progress.as_progress_view(), @r#"
     {
       "steps": [

@@ -15,7 +15,7 @@
 //! The [`Step`] trait is used to describe the steps composing a task.
 //! 
 //! The API of the [`Progress`] is made of three parts:
-//! - Add something to the stack of steps being processed with the [`Progress::update_progress`] method. It accepts any type that implements the [`Step`] trait.
+//! - Add something to the stack of steps being processed with the [`Progress::update`] method. It accepts any type that implements the [`Step`] trait.
 //! - Get the current progress view with the [`Progress::as_progress_view`] method.
 //! - Get the accumulated durations of each steps with the [`Progress::accumulated_durations`] method.
 //!
@@ -43,19 +43,19 @@
 //! make_atomic_progress!(KeyStrokes alias AtomicKeyStrokesStep => "key strokes");
 //! 
 //! let mut progress = Progress::default();
-//! progress.update_progress(TamosDay::PetTheDog); // We're at 0/4 and 0% of completion
-//! progress.update_progress(TamosDay::WalkTheDog); // We're at 1/4 and 25% of completion
+//! progress.update(TamosDay::PetTheDog); // We're at 0/4 and 0% of completion
+//! progress.update(TamosDay::WalkTheDog); // We're at 1/4 and 25% of completion
 //! 
-//! progress.update_progress(TamosDay::TypeALotOnTheKeyboard); // We're at 2/4 and 50% of completion
+//! progress.update(TamosDay::TypeALotOnTheKeyboard); // We're at 2/4 and 50% of completion
 //! let (atomic, key_strokes) = AtomicKeyStrokesStep::new(1000);
-//! progress.update_progress(key_strokes);
+//! progress.update(key_strokes);
 //! // Here we enqueued a new step that have 1000 total states. Since we don't want to take a lock everytime
 //! // we type on the keyboard we're instead going to increase an atomic without taking the mutex.
 //!
 //! atomic.fetch_add(500, Ordering::Relaxed);
 //! // If we fetch the progress at this point it should be exactly between 50% and 75%.
 //! 
-//! progress.update_progress(TamosDay::WalkTheDogAgain); // We're at 3/4 and 75% of completion
+//! progress.update(TamosDay::WalkTheDogAgain); // We're at 3/4 and 75% of completion
 //! // By enqueuing this new step the progress is going to drop everything that was pushed after the `TamosDay` type was pushed.
 //! ```
 
@@ -109,7 +109,7 @@ impl Progress {
     /// If the step is found, it will be updated.
     /// 
     /// If the step is found and the current is higher than the total, it will be ignored.
-    pub fn update_progress<P: Step>(&self, sub_progress: P) {
+    pub fn update<P: Step>(&self, sub_progress: P) {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress { steps, durations } = &mut *inner;
 
@@ -379,7 +379,7 @@ pub struct ProgressStepView {
 /// ```text
 /// enum UpgradeVersion {}
 ///
-/// progress.update_progress(VariableNameStep::<UpgradeVersion>::new(
+/// progress.update(VariableNameStep::<UpgradeVersion>::new(
 ///     "v1 to v2",
 ///     0,
 ///     10,
