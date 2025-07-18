@@ -174,17 +174,36 @@ impl DefaultProgress {
                     total_duration,
                     self_duration,
                 } = duration;
-                println!(
-                    "{BLUE}{name}{RESET_COLOR} => total: {total_duration:?} ({:.2}%) self: {self_duration:?} ({:.2}%)",
-                    (total_duration.as_secs_f64() / duration_since_start) * 100.0,
-                    (self_duration.as_secs_f64() / duration_since_start) * 100.0
-                );
+                print!("{BLUE}{name}{RESET_COLOR} => ",);
+                let total_percentage =
+                    (total_duration.as_secs_f64() / duration_since_start) * 100.0;
+                let self_percentage = (self_duration.as_secs_f64() / duration_since_start) * 100.0;
+                let color = get_color_from_percentage(total_percentage);
+                print!("{color}total: {total_duration:?} ({total_percentage:.2}%){RESET_COLOR}",);
+                let color = get_color_from_percentage(self_percentage);
+                println!(" {color}self: {self_duration:?} ({self_percentage:.2}%){RESET_COLOR}",);
             }
             println!(
                 "Finished in {:.2?}",
                 inner.finished_at.unwrap().duration_since(inner.start_time)
             );
         });
+    }
+}
+
+fn get_color_from_percentage(percentage: f64) -> &'static str {
+    const GRAY: &str = "\x1b[30;1m";
+    const GREEN: &str = "\x1b[32;1m";
+    const YELLOW: &str = "\x1b[33;1m";
+    const RED: &str = "\x1b[31;1m";
+    const WHITE: &str = "\x1b[37;1m";
+
+    match percentage {
+        0.0..5.0 => GRAY,
+        5.0..15.0 => GREEN,
+        15.0..50.0 => YELLOW,
+        50.0..100.0 => RED,
+        _ => WHITE,
     }
 }
 

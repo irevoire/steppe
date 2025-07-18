@@ -226,12 +226,12 @@ fn the_test_tm() {
 
     let mut durations = progress.accumulated_durations();
     // sadly we must erase all the values because that would be flaky. But the name and order of the steps should be stable.
-    durations
-        .iter_mut()
-        .for_each(|(_, v)| *v = StepDuration {
+    durations.iter_mut().for_each(|(_, v)| {
+        *v = StepDuration {
             total_duration: SignedDuration::ZERO,
             self_duration: SignedDuration::ZERO,
-        });
+        }
+    });
     println!("{:?}", durations);
     assert_json_snapshot!(durations, @r#"
     {
