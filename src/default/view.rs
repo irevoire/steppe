@@ -61,18 +61,19 @@ impl DefaultProgress {
         let now = jiff::Timestamp::now();
 
         let mut step_view = Vec::with_capacity(steps.len());
-        for (_, step, started_at) in steps.iter() {
-            let total = step.total();
-            let current = step.current().min(total) as f32;
+        for step in steps.iter() {
+            let name = step.step.name();
+            let total = step.step.total();
+            let current = step.step.current().min(total);
             prev_factors *= total as f32;
-            global_percentage += current / prev_factors;
+            global_percentage += (current as f32) / prev_factors;
 
             step_view.push(ProgressStepView {
-                current_step: step.name(),
-                finished: step.current(),
-                total: step.total(),
-                percentage: current / total as f32 * 100.0,
-                duration: now.duration_since(*started_at),
+                current_step: name,
+                finished: current,
+                total,
+                percentage: (current as f32) / (total as f32) * 100.0,
+                duration: now.duration_since(step.started_at),
             });
         }
 
@@ -93,7 +94,7 @@ impl DefaultProgress {
     ///     "step1 > step2": "1.23s", // The duration of the step2 within the step1
     ///     "step1": "1.43s", // The total duration of the step1. Here we see that most of the time was spent in step1.
     /// }
-    pub fn accumulated_durations(&self) -> IndexMap<String, String> {
+    pub fn accumulated_durations(&self) -> IndexMap<String, StepDuration> {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress {
             steps, durations, ..
@@ -101,19 +102,31 @@ impl DefaultProgress {
 
         let now = jiff::Timestamp::now();
         let idx = 0;
-        for (i, (_, _, started_at)) in steps.iter().skip(idx).enumerate().rev() {
+        for (i, step) in steps.iter().skip(idx).enumerate().rev() {
             let full_name = steps
                 .iter()
                 .take(idx + i + 1)
-                .map(|(_, s, _)| s.name())
+                .map(|step| step.step.name())
                 .collect::<Vec<_>>()
                 .join(" > ");
-            durations.push((full_name, now.duration_since(*started_at)));
+            durations.push((
+                full_name,
+                now.duration_since(step.started_at),
+                step.time_spent_in_children,
+            ));
         }
 
         durations
             .iter()
-            .map(|(name, duration)| (name.to_string(), format!("{duration:.2?}")))
+            .map(|(name, total_duration, self_duration)| {
+                (
+                    name.to_string(),
+                    StepDuration {
+                        total_duration: *total_duration,
+                        self_duration: *self_duration,
+                    },
+                )
+            })
             .collect()
     }
 
@@ -132,6 +145,8 @@ impl DefaultProgress {
             const CTRL: &str = "\x1b[";
             const UP: &str = "A";
             const CLEAR_LINE: &str = "2K";
+            const BLUE: &str = "\x1b[34;1m";
+            const RESET_COLOR: &str = "\x1b[m";
 
             while !this.is_finished() {
                 let now = jiff::Timestamp::now();
@@ -142,7 +157,6 @@ impl DefaultProgress {
                     }
                     let view = this.as_progress_view();
                     let json = colored_json::to_colored_json_auto(&view).unwrap();
-                    // let json = serde_json::to_string_pretty(&view).unwrap();
                     println!("{}", json);
                     lines_of_last_print = json.lines().count();
                 }
@@ -150,10 +164,36 @@ impl DefaultProgress {
 
             let durations = this.accumulated_durations();
             let inner = this.steps.read().unwrap();
+            let duration_since_start = inner
+                .finished_at
+                .unwrap_or_else(|| jiff::Timestamp::now())
+                .duration_since(inner.start_time)
+                .as_secs_f64();
             for (name, duration) in durations {
-                println!("{name}: {duration}");
+                let StepDuration {
+                    total_duration,
+                    self_duration,
+                } = duration;
+                println!(
+                    "{BLUE}{name}{RESET_COLOR} => total: {total_duration:?} ({:.2}%) self: {self_duration:?} ({:.2}%)",
+                    (total_duration.as_secs_f64() / duration_since_start) * 100.0,
+                    (self_duration.as_secs_f64() / duration_since_start) * 100.0
+                );
             }
-            println!("Finished in {:.2?}", inner.finished_at.unwrap().duration_since(inner.start_time));
+            println!(
+                "Finished in {:.2?}",
+                inner.finished_at.unwrap().duration_since(inner.start_time)
+            );
         });
     }
+}
+
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StepDuration {
+    #[serde(serialize_with = "jiff::fmt::serde::duration::friendly::compact::required")]
+    pub total_duration: jiff::SignedDuration,
+    #[serde(serialize_with = "jiff::fmt::serde::duration::friendly::compact::required")]
+    pub self_duration: jiff::SignedDuration,
 }

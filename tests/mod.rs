@@ -1,9 +1,10 @@
 use insta::assert_json_snapshot;
+use jiff::SignedDuration;
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use steppe::default::DefaultProgress;
+use steppe::default::{DefaultProgress, StepDuration};
 use steppe::*;
 
 make_enum_progress! {
@@ -186,7 +187,7 @@ fn the_test_tm() {
         },
         {
           "currentStep": "custom unit",
-          "finished": 1000,
+          "finished": 2,
           "total": 2,
           "percentage": 100.0,
           "duration": "[duration]"
@@ -227,17 +228,45 @@ fn the_test_tm() {
     // sadly we must erase all the values because that would be flaky. But the name and order of the steps should be stable.
     durations
         .iter_mut()
-        .for_each(|(_, v)| *v = "[duration]".to_string());
+        .for_each(|(_, v)| *v = StepDuration {
+            total_duration: SignedDuration::ZERO,
+            self_duration: SignedDuration::ZERO,
+        });
+    println!("{:?}", durations);
     assert_json_snapshot!(durations, @r#"
     {
-      "the first step > we wont go too far this time": "[duration]",
-      "the first step > just one more": "[duration]",
-      "the first step > we are done > custom unit": "[duration]",
-      "the first step > we are done": "[duration]",
-      "the first step": "[duration]",
-      "the third step > custom unit": "[duration]",
-      "the third step": "[duration]",
-      "the final step": "[duration]"
+      "the first step > we wont go too far this time": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the first step > just one more": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the first step > we are done > custom unit": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the first step > we are done": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the first step": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the third step > custom unit": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the third step": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      },
+      "the final step": {
+        "totalDuration": "0s",
+        "selfDuration": "0s"
+      }
     }
     "#);
 }

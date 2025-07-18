@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{Progress, Step};
-pub use view::{ProgressStepView, ProgressView};
+pub use view::{ProgressStepView, ProgressView, StepDuration};
 
 /// The main struct of the crate.
 /// It stores the current steps we're processing.
@@ -29,13 +29,20 @@ impl Progress for DefaultProgress {
 
 struct InnerProgress {
     /// The hierarchy of steps.
-    steps: Vec<(TypeId, Box<dyn Step>, jiff::Timestamp)>,
+    steps: Vec<InnerStep>,
     /// The durations associated to each steps.
-    durations: Vec<(String, jiff::SignedDuration)>,
+    durations: Vec<(String, jiff::SignedDuration, jiff::SignedDuration)>,
     /// The time at which the progress was finished.
     finished_at: Option<jiff::Timestamp>,
     /// The time at which the progress was created.
     start_time: jiff::Timestamp,
+}
+
+struct InnerStep {
+    type_id: TypeId,
+    step: Box<dyn Step>,
+    started_at: jiff::Timestamp,
+    time_spent_in_children: jiff::SignedDuration,
 }
 
 impl Default for InnerProgress {
@@ -67,12 +74,17 @@ impl DefaultProgress {
 
         let now = jiff::Timestamp::now();
         let step_type = TypeId::of::<P>();
-        if let Some(idx) = steps.iter().position(|(id, _, _)| *id == step_type) {
+        if let Some(idx) = steps.iter().position(|step| step.type_id == step_type) {
             push_steps_durations(steps, durations, now, idx);
             steps.truncate(idx);
         }
 
-        steps.push((step_type, Box::new(sub_progress), now));
+        steps.push(InnerStep {
+            type_id: step_type,
+            step: Box::new(sub_progress),
+            started_at: now,
+            time_spent_in_children: jiff::SignedDuration::ZERO,
+        });
     }
 
     /// Drop all the steps and update the durations.
@@ -106,18 +118,26 @@ impl DefaultProgress {
 
 /// Generate the names associated with the durations and push them.
 fn push_steps_durations(
-    steps: &[(TypeId, Box<dyn Step>, jiff::Timestamp)],
-    durations: &mut Vec<(String, jiff::SignedDuration)>,
+    steps: &[InnerStep],
+    durations: &mut Vec<(String, jiff::SignedDuration, jiff::SignedDuration)>,
     now: jiff::Timestamp,
     idx: usize,
 ) {
-    for (i, (_, _, started_at)) in steps.iter().skip(idx).enumerate().rev() {
+    let mut father_duration: Option<jiff::SignedDuration> = None;
+
+    for (i, step) in steps.iter().skip(idx).enumerate().rev() {
         let full_name = steps
             .iter()
             .take(idx + i + 1)
-            .map(|(_, s, _)| s.name())
+            .map(|step| step.step.name())
             .collect::<Vec<_>>()
             .join(" > ");
-        durations.push((full_name, now.duration_since(*started_at)));
+        let total_duration = now.duration_since(step.started_at);
+        let self_duration = match father_duration {
+            Some(father) => total_duration - father,
+            None => total_duration,
+        };
+        durations.push((full_name, total_duration, self_duration));
+        father_duration = Some(total_duration);
     }
 }
