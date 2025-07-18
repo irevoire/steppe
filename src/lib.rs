@@ -61,6 +61,7 @@
 //! // By enqueuing this new step the progress is going to drop everything that was pushed after the `TamosDay` type was pushed.
 //! ```
 
+#[cfg(feature = "default-progress")]
 pub mod default;
 mod helper;
 pub use helper::{AtomicSubStep, NamedStep, VariableNameStep};
@@ -69,7 +70,6 @@ use std::borrow::Cow;
 
 #[doc(hidden)]
 pub use convert_case as _private_convert_case;
-
 
 /// The main trait of the crate. That describes an unit of works.
 /// - It contains a name that can change over time.

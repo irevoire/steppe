@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use indexmap::IndexMap;
 use serde::Serialize;
 
-use super::{InnerProgress, DefaultProgress};
+use super::{DefaultProgress, InnerProgress};
 
 /// The returned view of the progress.
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -13,7 +13,7 @@ pub struct ProgressView {
     pub steps: Vec<ProgressStepView>,
     pub percentage: f32,
     #[serde(serialize_with = "jiff::fmt::serde::duration::friendly::compact::required")]
-    pub running_for: jiff::SignedDuration,
+    pub duration: jiff::SignedDuration,
 }
 
 /// The view of the individual steps.
@@ -26,7 +26,7 @@ pub struct ProgressStepView {
     pub total: u64,
     pub percentage: f32,
     #[serde(serialize_with = "jiff::fmt::serde::duration::friendly::compact::required")]
-    pub running_for: jiff::SignedDuration,
+    pub duration: jiff::SignedDuration,
 }
 
 impl DefaultProgress {
@@ -72,14 +72,14 @@ impl DefaultProgress {
                 finished: step.current(),
                 total: step.total(),
                 percentage: current / total as f32 * 100.0,
-                running_for: now.duration_since(*started_at),
+                duration: now.duration_since(*started_at),
             });
         }
 
         ProgressView {
             steps: step_view,
             percentage: global_percentage * 100.0,
-            running_for: now.duration_since(inner.start_time),
+            duration: now.duration_since(inner.start_time),
         }
     }
 
@@ -115,5 +115,42 @@ impl DefaultProgress {
             .iter()
             .map(|(name, duration)| (name.to_string(), format!("{duration:.2?}")))
             .collect()
+    }
+
+    /// Helper to follow the progression on a tty.
+    /// Starts a new screen that:
+    /// - Refresh the screen every 100ms.
+    /// - Display the progress view while the progress is not finished => It will overwrite itself so if you must print other stuff at the same time it might not come out nice :s
+    /// - Display the accumulated durations of each steps once the progress is finished and exit the thread.
+    ///
+    pub fn follow_progression_on_tty(&self) {
+        let this = self.clone();
+        std::thread::spawn(move || {
+            let refresh_rate = jiff::SignedDuration::from_millis(100);
+            let mut last_print = jiff::Timestamp::now();
+            let mut lines_of_last_print = 0;
+            const CTRL: &str = "\x1b[";
+            const UP: &str = "A";
+            const CLEAR_LINE: &str = "2K";
+
+            while !this.is_finished() {
+                let now = jiff::Timestamp::now();
+                if now.duration_since(last_print) > refresh_rate {
+                    last_print = now;
+                    for _ in 0..lines_of_last_print {
+                        print!("{CTRL}{UP}{CTRL}{CLEAR_LINE}");
+                    }
+                    let view = this.as_progress_view();
+                    let json = serde_json::to_string_pretty(&view).unwrap();
+                    println!("{}", json);
+                    lines_of_last_print = json.lines().count();
+                }
+            }
+
+            let durations = this.accumulated_durations();
+            for (name, duration) in durations {
+                println!("{name}: {duration}");
+            }
+        });
     }
 }

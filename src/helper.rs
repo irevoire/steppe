@@ -1,7 +1,13 @@
-use std::{borrow::Cow, marker::PhantomData, sync::{atomic::{AtomicU64, Ordering}, Arc}};
+use std::{
+    borrow::Cow,
+    marker::PhantomData,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use crate::Step;
-
 
 /// This trait lets you use the AtomicSubStep defined right below.
 /// The name must be a const that never changed but that can't be enforced by the type system because it make the trait non object-safe.

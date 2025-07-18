@@ -1,10 +1,12 @@
 mod view;
 
-use std::{any::TypeId, sync::{Arc, RwLock}};
+use std::{
+    any::TypeId,
+    sync::{Arc, RwLock},
+};
 
 use crate::{Progress, Step};
 pub use view::{ProgressStepView, ProgressView};
-
 
 /// The main struct of the crate.
 /// It stores the current steps we're processing.
@@ -30,13 +32,20 @@ struct InnerProgress {
     steps: Vec<(TypeId, Box<dyn Step>, jiff::Timestamp)>,
     /// The durations associated to each steps.
     durations: Vec<(String, jiff::SignedDuration)>,
+    /// The time at which the progress was finished.
+    finished_at: Option<jiff::Timestamp>,
     /// The time at which the progress was created.
     start_time: jiff::Timestamp,
 }
 
 impl Default for InnerProgress {
     fn default() -> Self {
-        Self { steps: vec![], durations: vec![], start_time: jiff::Timestamp::now() }
+        Self {
+            steps: vec![],
+            durations: vec![],
+            finished_at: None,
+            start_time: jiff::Timestamp::now(),
+        }
     }
 }
 
@@ -49,7 +58,12 @@ impl DefaultProgress {
     /// If the step is found and the current is higher than the total, it will be ignored.
     pub fn update<P: Step>(&self, sub_progress: P) {
         let mut inner = self.steps.write().unwrap();
-        let InnerProgress { steps, durations, start_time: _ } = &mut *inner;
+        let InnerProgress {
+            steps,
+            durations,
+            finished_at: _,
+            start_time: _,
+        } = &mut *inner;
 
         let now = jiff::Timestamp::now();
         let step_type = TypeId::of::<P>();
@@ -67,11 +81,26 @@ impl DefaultProgress {
     /// Directly calling [`Progress::accumulated_durations`] instead of `finish` will give the same result.
     pub fn finish(&self) {
         let mut inner = self.steps.write().unwrap();
-        let InnerProgress { steps, durations, start_time: _ } = &mut *inner;
+        let InnerProgress {
+            steps,
+            durations,
+            finished_at,
+            start_time: _,
+        } = &mut *inner;
+
+        if finished_at.is_some() {
+            return;
+        }
 
         let now = jiff::Timestamp::now();
+        *finished_at = Some(now);
         push_steps_durations(steps, durations, now, 0);
         steps.clear();
+    }
+
+    pub fn is_finished(&self) -> bool {
+        let inner = self.steps.read().unwrap();
+        inner.finished_at.is_some()
     }
 }
 
