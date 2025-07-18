@@ -141,16 +141,19 @@ impl DefaultProgress {
                         print!("{CTRL}{UP}{CTRL}{CLEAR_LINE}");
                     }
                     let view = this.as_progress_view();
-                    let json = serde_json::to_string_pretty(&view).unwrap();
+                    let json = colored_json::to_colored_json_auto(&view).unwrap();
+                    // let json = serde_json::to_string_pretty(&view).unwrap();
                     println!("{}", json);
                     lines_of_last_print = json.lines().count();
                 }
             }
 
             let durations = this.accumulated_durations();
+            let inner = this.steps.read().unwrap();
             for (name, duration) in durations {
                 println!("{name}: {duration}");
             }
+            println!("Finished in {:.2?}", inner.finished_at.unwrap().duration_since(inner.start_time));
         });
     }
 }
