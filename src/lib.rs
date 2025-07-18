@@ -44,7 +44,7 @@
 //! // It's displayed as "key strokes" and we cannot change its name.
 //! make_atomic_progress!(KeyStrokes alias AtomicKeyStrokesStep => "key strokes");
 //!
-//! let mut progress = steppe::DefaultProgress::default();
+//! let mut progress = steppe::default::DefaultProgress::default();
 //! progress.update(TamosDay::PetTheDog); // We're at 0/4 and 0% of completion
 //! progress.update(TamosDay::WalkTheDog); // We're at 1/4 and 25% of completion
 //!
@@ -61,12 +61,9 @@
 //! // By enqueuing this new step the progress is going to drop everything that was pushed after the `TamosDay` type was pushed.
 //! ```
 
-mod view;
-mod default;
+pub mod default;
 mod helper;
-pub use default::DefaultProgress;
 pub use helper::{AtomicSubStep, NamedStep, VariableNameStep};
-pub use view::{ProgressStepView, ProgressView};
 
 use std::borrow::Cow;
 

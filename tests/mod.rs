@@ -4,6 +4,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 use steppe::*;
+use steppe::default::DefaultProgress;
 
 make_enum_progress! {
     pub enum CustomMainSteps {
@@ -28,158 +29,197 @@ make_atomic_progress!(CustomUnit alias AtomicCustomUnit => "custom unit");
 fn the_test_tm() {
     let progress = DefaultProgress::default();
     progress.update(CustomMainSteps::TheFirstStep);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the first step",
           "finished": 0,
-          "total": 4
+          "total": 4,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 0.0
+      "percentage": 0.0,
+      "runningFor": "[duration]"
     }
     "#);
     progress.update(CustomSubSteps::WeWontGoTooFarThisTime);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the first step",
           "finished": 0,
-          "total": 4
+          "total": 4,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "we wont go too far this time",
           "finished": 0,
-          "total": 3
+          "total": 3,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 0.0
+      "percentage": 0.0,
+      "runningFor": "[duration]"
     }
     "#);
     progress.update(CustomSubSteps::JustOneMore);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the first step",
           "finished": 0,
-          "total": 4
+          "total": 4,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "just one more",
           "finished": 1,
-          "total": 3
+          "total": 3,
+          "percentage": 33.333336,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 8.333334
+      "percentage": 8.333334,
+      "runningFor": "[duration]"
     }
     "#);
     progress.update(CustomSubSteps::WeAreDone);
     let (atomic, unit) = AtomicCustomUnit::new(10);
     atomic.fetch_add(6, Ordering::Relaxed);
     progress.update(unit);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the first step",
           "finished": 0,
-          "total": 4
+          "total": 4,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "we are done",
           "finished": 2,
-          "total": 3
+          "total": 3,
+          "percentage": 66.66667,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "custom unit",
           "finished": 6,
-          "total": 10
+          "total": 10,
+          "percentage": 60.000004,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 21.666666
+      "percentage": 21.666666,
+      "runningFor": "[duration]"
     }
     "#);
     atomic.fetch_add(3, Ordering::Relaxed);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the first step",
           "finished": 0,
-          "total": 4
+          "total": 4,
+          "percentage": 0.0,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "we are done",
           "finished": 2,
-          "total": 3
+          "total": 3,
+          "percentage": 66.66667,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "custom unit",
           "finished": 9,
-          "total": 10
+          "total": 10,
+          "percentage": 90.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 24.166668
+      "percentage": 24.166668,
+      "runningFor": "[duration]"
     }
     "#);
     // This should delete both the atomic step and the sub step + We're skipping the second step
     progress.update(CustomMainSteps::TheThirdStep);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the third step",
           "finished": 2,
-          "total": 4
+          "total": 4,
+          "percentage": 50.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 50.0
+      "percentage": 50.0,
+      "runningFor": "[duration]"
     }
     "#);
     let (atomic, unit) = AtomicCustomUnit::new(2);
     // We don't have any check on the max but the percentage should cap itself at the maximum specified value as a "finished" higher than the total means you have a bug
     atomic.fetch_add(1000, Ordering::Relaxed);
     progress.update(unit);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the third step",
           "finished": 2,
-          "total": 4
+          "total": 4,
+          "percentage": 50.0,
+          "runningFor": "[duration]"
         },
         {
           "currentStep": "custom unit",
           "finished": 1000,
-          "total": 2
+          "total": 2,
+          "percentage": 100.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 75.0
+      "percentage": 75.0,
+      "runningFor": "[duration]"
     }
     "#);
     // This should delete the atomic step only
     progress.update(CustomMainSteps::TheFinalStep);
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [
         {
           "currentStep": "the final step",
           "finished": 3,
-          "total": 4
+          "total": 4,
+          "percentage": 75.0,
+          "runningFor": "[duration]"
         }
       ],
-      "percentage": 75.0
+      "percentage": 75.0,
+      "runningFor": "[duration]"
     }
     "#);
 
     progress.finish();
-    assert_json_snapshot!(progress.as_progress_view(), @r#"
+    assert_json_snapshot!(progress.as_progress_view(), { ".**.runningFor" => "[duration]" }, @r#"
     {
       "steps": [],
-      "percentage": 0.0
+      "percentage": 0.0,
+      "runningFor": "[duration]"
     }
     "#);
 
