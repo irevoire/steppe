@@ -139,8 +139,6 @@ impl DefaultProgress {
     pub fn follow_progression_on_tty(&self) {
         let this = self.clone();
         std::thread::spawn(move || {
-            let refresh_rate = jiff::SignedDuration::from_millis(100);
-            let mut last_print = jiff::Timestamp::now();
             let mut lines_of_last_print = 0;
             const CTRL: &str = "\x1b[";
             const UP: &str = "A";
@@ -149,17 +147,14 @@ impl DefaultProgress {
             const RESET_COLOR: &str = "\x1b[m";
 
             while !this.is_finished() {
-                let now = jiff::Timestamp::now();
-                if now.duration_since(last_print) > refresh_rate {
-                    last_print = now;
-                    for _ in 0..lines_of_last_print {
-                        print!("{CTRL}{UP}{CTRL}{CLEAR_LINE}");
-                    }
-                    let view = this.as_progress_view();
-                    let json = colored_json::to_colored_json_auto(&view).unwrap();
-                    println!("{}", json);
-                    lines_of_last_print = json.lines().count();
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                for _ in 0..lines_of_last_print {
+                    print!("{CTRL}{UP}{CTRL}{CLEAR_LINE}");
                 }
+                let view = this.as_progress_view();
+                let json = colored_json::to_colored_json_auto(&view).unwrap();
+                println!("{}", json);
+                lines_of_last_print = json.lines().count();
             }
 
             let durations = this.accumulated_durations();
