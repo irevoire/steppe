@@ -89,8 +89,8 @@ impl DefaultProgress {
 
     /// Drop all the steps and update the durations.
     ///
-    /// This is not mandatory. But if you don't do it and take a lot of time before calling [`Progress::accumulated_durations`] the last step will appear as taking more time than it actually did.
-    /// Directly calling [`Progress::accumulated_durations`] instead of `finish` will give the same result.
+    /// This is not mandatory. But if you don't do it and take a lot of time before calling [`DefaultProgress::accumulated_durations`] the last step will appear as taking more time than it actually did.
+    /// Directly calling [`DefaultProgress::accumulated_durations`] instead of `finish` will give the same result.
     pub fn finish(&self) {
         let mut inner = self.steps.write().unwrap();
         let InnerProgress {

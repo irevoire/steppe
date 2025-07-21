@@ -135,7 +135,6 @@ impl DefaultProgress {
     /// - Refresh the screen every 100ms.
     /// - Display the progress view while the progress is not finished => It will overwrite itself so if you must print other stuff at the same time it might not come out nice :s
     /// - Display the accumulated durations of each steps once the progress is finished and exit the thread.
-    ///
     pub fn follow_progression_on_tty(&self) {
         let this = self.clone();
         std::thread::spawn(move || {
